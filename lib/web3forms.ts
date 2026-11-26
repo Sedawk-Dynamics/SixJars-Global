@@ -8,9 +8,10 @@
  * required"), so this must be called from client components, never from an
  * API route or server action.
  *
- * Server-side protection is enforced by Web3Forms: hCaptcha (switched on for
- * this key in the Web3Forms dashboard, so a submission without a valid token
- * is rejected), the Advanced Spam Filter, and the botcheck honeypot.
+ * Server-side protection is enforced by Web3Forms: the Advanced Spam Filter
+ * and the botcheck honeypot. There is no captcha — Captcha Protection must stay
+ * set to "None" for this key in the Web3Forms dashboard, or every submission
+ * is rejected for a missing captcha token.
  */
 const ENDPOINT = 'https://api.web3forms.com/submit'
 const ACCESS_KEY = 'bdafb4f8-4bef-4106-901d-0598a9e3a927'
@@ -46,10 +47,7 @@ function clean(key: string, value: string | boolean): string | boolean {
   return v.trim().slice(0, key === 'email' ? MAX_EMAIL : MAX_LINE)
 }
 
-export async function submitForm(fields: FormFields, captchaToken: string): Promise<void> {
-  if (!captchaToken) {
-    throw new Error('Please complete the captcha check.')
-  }
+export async function submitForm(fields: FormFields): Promise<void> {
   const cleaned = Object.fromEntries(
     Object.entries(fields).map(([k, v]) => [k, clean(k, v)]),
   ) as FormFields
@@ -65,8 +63,6 @@ export async function submitForm(fields: FormFields, captchaToken: string): Prom
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({
         ...cleaned,
-        // Sent as-is: the token is long and must not be cleaned or truncated.
-        'h-captcha-response': captchaToken,
         access_key: ACCESS_KEY,
         from_name: 'Six Jars Global website',
       }),

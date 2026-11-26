@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Send, CheckCircle, AlertCircle, ShieldAlert } from 'lucide-react'
 import { capabilities, contactPaths, org, type ContactPathId } from '@/lib/content'
 import { EMAIL, submitForm } from '@/lib/web3forms'
-import { FormCaptcha, type HCaptcha } from '@/components/form-captcha'
 
 /** Whether the desk is staffed right now: Monday–Friday, 09:00–18:00 IST. */
 function isStaffedNow(now = new Date()) {
@@ -54,14 +53,15 @@ function StaffedState() {
  * Every field has a visible <label for>, an id, a name, an autocomplete token,
  * an inline error tied by aria-describedby, and a live-region status message.
  *
- * Only name, email and goal are required, plus the hCaptcha check. The
- * enquiry is cleaned in the browser and sent straight to Web3Forms (its free
- * plan refuses server-side calls), which verifies the captcha and runs its
- * spam filter. Success is shown only once delivery is confirmed — a failure
- * keeps every typed value and offers the email address instead.
+ * Only name, email and goal are required. There is no captcha: hCaptcha's
+ * puzzles were too hard for real visitors. The enquiry is cleaned in the
+ * browser and sent straight to Web3Forms (its free plan refuses server-side
+ * calls), which checks the botcheck honeypot and runs its spam filter.
+ * Success is shown only once delivery is confirmed — a failure keeps every
+ * typed value and offers the email address instead.
  */
 
-type Errors = Partial<Record<'name' | 'email' | 'message' | 'captcha', string>>
+type Errors = Partial<Record<'name' | 'email' | 'message', string>>
 
 const fieldStyle: React.CSSProperties = {
   background: '#FFFFFF',
@@ -89,8 +89,6 @@ export default function ContactForm({
     message: '',
   })
   const [failMessage, setFailMessage] = useState('')
-  const [captchaToken, setCaptchaToken] = useState('')
-  const captchaRef = useRef<HCaptcha>(null)
   const errorSummaryRef = useRef<HTMLDivElement>(null)
   // Web3Forms honeypot: hidden from people, ticked only by bots.
   const botcheckRef = useRef<HTMLInputElement>(null)
@@ -112,15 +110,7 @@ export default function ContactForm({
     if (!values.message.trim()) {
       next.message = 'Tell us briefly what you would like to achieve.'
     }
-    if (!captchaToken) {
-      next.captcha = 'Complete the captcha check.'
-    }
     return next
-  }
-
-  const onCaptchaToken = (token: string) => {
-    setCaptchaToken(token)
-    if (token) setErrors((prev) => ({ ...prev, captcha: undefined }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,28 +130,21 @@ export default function ContactForm({
       : ''
     const service = capabilities.some((c) => c.shortName === values.route) ? values.route : ''
     try {
-      await submitForm(
-        {
-          subject: `New enquiry (${activePath.label}) from ${values.name}`,
-          name: values.name,
-          email: values.email.trim(),
-          enquiry_type: activePath.label,
-          enquiring_for: enquiringFor || 'Not stated',
-          organisation: values.org || 'Not stated',
-          service: service || 'Help me choose',
-          message: values.message,
-          botcheck: botcheckRef.current?.checked ?? false,
-        },
-        captchaToken
-      )
+      await submitForm({
+        subject: `New enquiry (${activePath.label}) from ${values.name}`,
+        name: values.name,
+        email: values.email.trim(),
+        enquiry_type: activePath.label,
+        enquiring_for: enquiringFor || 'Not stated',
+        organisation: values.org || 'Not stated',
+        service: service || 'Help me choose',
+        message: values.message,
+        botcheck: botcheckRef.current?.checked ?? false,
+      })
       setStatus('sent')
     } catch (err) {
       setFailMessage(err instanceof Error ? err.message : '')
       setStatus('failed')
-    } finally {
-      // hCaptcha tokens are single-use.
-      captchaRef.current?.resetCaptcha()
-      setCaptchaToken('')
     }
   }
 
@@ -483,15 +466,6 @@ export default function ContactForm({
               style={{ color: 'var(--color-rose)' }}
             >
               {errors.message}
-            </p>
-          )}
-        </div>
-
-        <div id="field-captcha">
-          <FormCaptcha ref={captchaRef} onToken={onCaptchaToken} />
-          {errors.captcha && (
-            <p className="mt-1.5 text-sm font-medium" style={{ color: 'var(--color-rose)' }}>
-              {errors.captcha}
             </p>
           )}
         </div>
